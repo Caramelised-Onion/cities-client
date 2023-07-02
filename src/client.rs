@@ -18,6 +18,10 @@ impl Default for Client {
     }
 }
 impl Client {
+    pub fn new(base_url: &str) -> Self {
+        Client { base_url: base_url.to_string() }
+    }
+
     pub fn get_full_URI(&self, additional_path: &str) -> String {
         // TODO check for trailing or leading slash
         format!("{}/{}", self.base_url, additional_path)
@@ -25,7 +29,6 @@ impl Client {
 }
 
 impl Client {
-    //
     pub async fn get_random_city(&self) -> Result<City, reqwest::Error> {
         let URI = self.get_full_URI("rand");
         reqwest::get(URI).await.unwrap().json::<City>().await
