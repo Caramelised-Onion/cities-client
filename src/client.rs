@@ -1,6 +1,6 @@
 use reqwest;
 
-use cities_common::models::City;
+use cities_common::models::{City, Country};
 use cities_common::queries::{CitiesQuery, DistQuery};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -17,9 +17,12 @@ impl Default for Client {
 }
 impl Client {
     pub fn new(base_url: &str) -> Self {
-        Client { base_url: base_url.to_string() }
+        Client {
+            base_url: base_url.to_string(),
+        }
     }
 
+    // TODO: make the query string only include the actual query string
     pub fn get_full_URI(&self, additional_path: &str) -> String {
         // TODO check for trailing or leading slash
         format!("{}/{}", self.base_url, additional_path)
@@ -47,6 +50,20 @@ impl Client {
         let URI = self.get_full_URI(&query_string);
         reqwest::get(URI).await.unwrap().json::<f64>().await
     }
+
+    pub async fn get_country_outline(
+        &self,
+        country_code: String,
+    ) -> Result<String, reqwest::Error> {
+        let query_string = format!("countries?country_code={}", country_code);
+        let URI = self.get_full_URI(&query_string);
+        reqwest::get(URI)
+            .await
+            .unwrap()
+            .json::<Country>()
+            .await
+            .map(|country| country.geom_wkt)
+    }
 }
 
 fn make_query_string(cities_query: &CitiesQuery) -> String {
@@ -62,6 +79,6 @@ fn make_query_string(cities_query: &CitiesQuery) -> String {
     }
     match query_parts.len() {
         0 => "cities".to_string(),
-        _ => format!("cities?{}", query_parts.join("&"))
+        _ => format!("cities?{}", query_parts.join("&")),
     }
 }
