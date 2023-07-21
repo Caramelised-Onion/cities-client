@@ -3,14 +3,16 @@ use reqwest;
 use cities_common::models::{City, Country};
 use cities_common::queries::{CitiesQuery, DistQuery};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Client {
     base_url: String,
+    client: reqwest::Client,
 }
 
 impl Default for Client {
     fn default() -> Self {
         Self {
+            client: reqwest::Client::new(),
             base_url: "http://localhost:3000".to_string(),
         }
     }
@@ -19,66 +21,67 @@ impl Client {
     pub fn new(base_url: &str) -> Self {
         Client {
             base_url: base_url.to_string(),
+            ..Default::default()
         }
     }
 
     // TODO: make the query string only include the actual query string
-    pub fn get_full_URI(&self, additional_path: &str) -> String {
+    pub fn get_full_uri(&self, additional_path: &str) -> String {
         // TODO check for trailing or leading slash
+        // or check if is there a nice inbuilt way to deal with this in one of deps
+        // might also want to do some sort of url encoding
         format!("{}/{}", self.base_url, additional_path)
     }
 }
 
 impl Client {
     pub async fn get_random_city(&self) -> Result<City, reqwest::Error> {
-        let URI = self.get_full_URI("rand");
-        reqwest::get(URI).await.unwrap().json::<City>().await
+        let uri = self.get_full_uri("rand");
+        // reqwest::get(uri).await.unwrap().json::<City>().await
+        self.client
+            .get(uri)
+            .send()
+            .await
+            .unwrap()
+            .json::<City>()
+            .await
     }
     pub async fn get_cities(&self, query: &CitiesQuery) -> Result<Vec<City>, reqwest::Error> {
-        let query_string = make_query_string(query);
-        let URI = self.get_full_URI(&query_string);
-        // reqwest::blocking::get(URI)?.json::<Vec<City>>()
-        reqwest::get(URI).await.unwrap().json::<Vec<City>>().await
+        let uri = self.get_full_uri("cities");
+        self.client
+            .get(uri)
+            .query(query)
+            .send()
+            .await
+            .unwrap()
+            .json::<Vec<City>>()
+            .await
     }
-    // http://127.0.0.1:3000/distance?city_id1=1&city_id2=2
-
+    
     pub async fn get_distance(&self, query: &DistQuery) -> Result<f64, reqwest::Error> {
-        let query_string = format!(
-            "distance?city_id1={}&city_id2={}",
-            query.city_id1, query.city_id2
-        );
-        let URI = self.get_full_URI(&query_string);
-        reqwest::get(URI).await.unwrap().json::<f64>().await
+        let uri = self.get_full_uri("distance");
+        self.client
+            .get(uri)
+            .query(query)
+            .send()
+            .await
+            .unwrap()
+            .json::<f64>()
+            .await
     }
 
+    // TODO use a query from models instead
     pub async fn get_country_outline(
         &self,
         country_code: String,
     ) -> Result<String, reqwest::Error> {
         let query_string = format!("countries?country_code={}", country_code);
-        let URI = self.get_full_URI(&query_string);
-        reqwest::get(URI)
+        let uri = self.get_full_uri(&query_string);
+        reqwest::get(uri)
             .await
             .unwrap()
             .json::<Country>()
             .await
             .map(|country| country.geom_wkt)
-    }
-}
-
-fn make_query_string(cities_query: &CitiesQuery) -> String {
-    let mut query_parts = vec![];
-    if let Some(country) = &cities_query.country {
-        query_parts.push(format!("country={}", country));
-    }
-    if let Some(sort_by_population) = &cities_query.sort_by_population {
-        query_parts.push(format!("sort_by_population={}", sort_by_population))
-    }
-    if let Some(limit) = &cities_query.limit {
-        query_parts.push(format!("limit={}", limit));
-    }
-    match query_parts.len() {
-        0 => "cities".to_string(),
-        _ => format!("cities?{}", query_parts.join("&")),
     }
 }
